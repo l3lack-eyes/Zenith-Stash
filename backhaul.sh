@@ -5,7 +5,7 @@ SCRIPT_VERSION="v0.6.0"
 
 # Check if the script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
+   echo "This script must be run as root"
    sleep 1
    exit 1
 fi
@@ -200,7 +200,7 @@ EOF
 
 # Function to display server location and IP
 display_server_info() {
-    echo -e "\e[93m═══════════════════════════════════════════\e[0m"  
+    echo -e "\e[93m═══════════════════════════════════════════\e[0m" 
  
     echo -e "${CYAN}IP Address:${NC} $SERVER_IP"
     echo -e "${CYAN}Location:${NC} $SERVER_COUNTRY "
@@ -214,7 +214,7 @@ display_backhaul_core_status() {
     else
         echo -e "${CYAN}Backhaul Core:${NC} ${RED}Not installed${NC}"
     fi
-    echo -e "\e[93m═══════════════════════════════════════════\e[0m"  
+    echo -e "\e[93m═══════════════════════════════════════════\e[0m" 
 }
 
 # Function to check if a given string is a valid IPv6 address
@@ -381,7 +381,7 @@ iran_server_configuration() {
     fi
 
     # TUN MTU
-    local mtu="1500"    
+    local mtu="1500"   
     if [[ "$transport" == "tcptun" || "$transport" == "faketcptun" ]]; then
         while true; do
             echo -ne "[-] TUN MTU (default 1500): "
@@ -404,7 +404,7 @@ iran_server_configuration() {
     
 
     # Accept UDP (only for tcp transport)
-	local accept_udp="" 
+	local accept_udp=""
 	if [[ "$transport" == "tcp" ]]; then
 	    while [[ "$accept_udp" != "true" && "$accept_udp" != "false" ]]; do
 	        echo -ne "[-] Accept UDP connections over TCP transport (true/false)(default false): "
@@ -844,7 +844,7 @@ kharej_server_configuration() {
     fi
 
     # TUN MTU
-    local mtu="1500"    
+    local mtu="1500"   
     if [[ "$transport" == "tcptun" || "$transport" == "faketcptun" ]]; then
         while true; do
             echo -ne "[-] TUN MTU (default 1500): "
@@ -1190,6 +1190,116 @@ check_tunnel_status() {
 
 
 
+# Function to add a cronjob for a tunnel
+add_cronjob() {
+    local service_name="$1"
+    local config_name="$2" # Pass config_name to use in the cronjob comment
+
+    clear
+    colorize cyan "Adding cronjob for $service_name" bold
+    echo
+
+    echo -e "Choose cronjob interval:"
+    echo -e "1) Every 5 minutes"
+    echo -e "2) Every 15 minutes"
+    echo -e "3) Every 30 minutes"
+    echo -e "4) Every hour"
+    echo -e "5) Every 6 hours"
+    echo -e "6) Every 12 hours"
+    echo -e "7) Every day"
+    colorize yellow "8) Set time manually (advanced)" bold
+    echo
+    read -p "Enter your choice [1-8]: " cron_choice
+
+    local cron_schedule=""
+    local cron_description=""
+
+    case "$cron_choice" in
+        1) cron_schedule="*/5 * * * *" ; cron_description="every 5 minutes" ;;
+        2) cron_schedule="*/15 * * * *" ; cron_description="every 15 minutes" ;;
+        3) cron_schedule="*/30 * * * *" ; cron_description="every 30 minutes" ;;
+        4) cron_schedule="0 * * * *" ; cron_description="every hour" ;;
+        5) cron_schedule="0 */6 * * *" ; cron_description="every 6 hours" ;;
+        6) cron_schedule="0 */12 * * *" ; cron_description="every 12 hours" ;;
+        7) cron_schedule="0 0 * * *" ; cron_description="every day" ;;
+        8) # Manual input
+            echo
+            colorize yellow "Enter cron schedule manually (e.g., '0 2 * * *' for 2 AM daily)." bold
+            colorize yellow "For detailed help on cron syntax, search 'cron syntax'." bold
+            echo "Format: Minute (0-59) Hour (0-23) Day_of_Month (1-31) Month (1-12) Day_of_Week (0-7, Sun=0 or 7)"
+            echo "Use '*' for 'every'."
+            echo
+            while true; do
+                echo -ne "Enter minute (0-59 or *): "
+                read -r manual_minute
+                if [[ "$manual_minute" =~ ^([0-5]?[0-9]|\*)$ ]]; then break; else colorize red "Invalid minute. Try again."; fi
+            done
+            while true; do
+                echo -ne "Enter hour (0-23 or *): "
+                read -r manual_hour
+                if [[ "$manual_hour" =~ ^(1?[0-9]|2[0-3]|\*)$ ]]; then break; else colorize red "Invalid hour. Try again."; fi
+            done
+            while true; do
+                echo -ne "Enter day of month (1-31 or *): "
+                read -r manual_dom
+                if [[ "$manual_dom" =~ ^(3?[0-1]|[1-2]?[0-9]|[1-9]|\*)$ ]]; then break; else colorize red "Invalid day of month. Try again."; fi
+            done
+            while true; do
+                echo -ne "Enter month (1-12 or *): "
+                read -r manual_month
+                if [[ "$manual_month" =~ ^(1?[0-2]|[1-9]|\*)$ ]]; then break; else colorize red "Invalid month. Try again."; fi
+            done
+            while true; do
+                echo -ne "Enter day of week (0-7, Sun=0 or 7, or *): "
+                read -r manual_dow
+                if [[ "$manual_dow" =~ ^([0-7]|\*)$ ]]; then break; else colorize red "Invalid day of week. Try again."; fi
+            done
+            cron_schedule="$manual_minute $manual_hour $manual_dom $manual_month $manual_dow"
+            cron_description="manually set schedule: $cron_schedule"
+            ;;
+        *) colorize red "Invalid choice. Aborting cronjob creation." && sleep 2 && return 1 ;;
+    esac
+
+    # Remove any existing cronjob for this service to avoid duplicates
+    (crontab -l 2>/dev/null | grep -v "# Backhaul cronjob for $config_name") | crontab -
+
+    # Add the new cronjob
+    (crontab -l 2>/dev/null; echo "$cron_schedule /usr/bin/systemctl restart $service_name # Backhaul cronjob for $config_name ($cron_description)") | crontab -
+
+    if [ $? -eq 0 ]; then
+        colorize green "Cronjob added successfully for $service_name to restart ($cron_description)." bold
+    else
+        colorize red "Failed to add cronjob for $service_name." bold
+    fi
+    echo
+    press_key
+}
+
+# Function to remove a cronjob for a tunnel
+remove_cronjob() {
+    local config_name="$1" # Use config_name to identify the cronjob
+
+    clear
+    colorize cyan "Removing cronjob for tunnel: $config_name" bold
+    echo
+
+    # Check if there's an existing cronjob for this service
+    if crontab -l 2>/dev/null | grep -q "# Backhaul cronjob for $config_name"; then
+        # Remove the specific cronjob entry
+        (crontab -l 2>/dev/null | grep -v "# Backhaul cronjob for $config_name") | crontab -
+        if [ $? -eq 0 ]; then
+            colorize green "Cronjob for $config_name removed successfully." bold
+        else
+            colorize red "Failed to remove cronjob for $config_name." bold
+        FId
+    else
+        colorize yellow "No cronjob found for $config_name." bold
+    fi
+    echo
+    press_key
+}
+
+
 # Function for destroying tunnel
 tunnel_management() {
 	echo
@@ -1243,7 +1353,7 @@ tunnel_management() {
     
     echo
 	echo -ne "Enter your choice (0 to return): "
-    read choice 
+    read choice
 	
 	# Check if the user chose to return
 	if (( choice == 0 )); then
@@ -1271,6 +1381,8 @@ tunnel_management() {
 	colorize yellow "2) Restart this tunnel"
 	colorize reset "3) View service logs"
     colorize reset "4) View service status"
+    colorize green "5) Add cronjob for this tunnel"
+    colorize red "6) Remove cronjob for this tunnel"
 	echo 
 	read -p "Enter your choice (0 to return): " choice
 	
@@ -1279,6 +1391,8 @@ tunnel_management() {
         2) restart_service "$service_name" ;;
         3) view_service_logs "$service_name" ;;
         4) view_service_status "$service_name" ;;
+        5) add_cronjob "$service_name" "$config_name" ;;
+        6) remove_cronjob "$config_name" ;;
         0) return 1 ;;
         *) echo -e "${RED}Invalid option!${NC}" && sleep 1 && return 1;;
     esac
@@ -1336,7 +1450,7 @@ restart_service() {
         colorize green "Service restarted successfully" bold
 
     else
-        colorize red "Cannot restart the service" 
+        colorize red "Cannot restart the service"
     fi
     echo
     press_key
@@ -1647,7 +1761,7 @@ EOF
 limits_optimizations() {
     echo
     echo -e "${YELLOW}Optimizing System Limits...${NC}"
-    echo 
+    echo
     sleep 0.5
 
     ## Clear old ulimits
