@@ -1291,7 +1291,7 @@ remove_cronjob() {
             colorize green "Cronjob for $config_name removed successfully." bold
         else
             colorize red "Failed to remove cronjob for $config_name." bold
-        FId
+        fi
     else
         colorize yellow "No cronjob found for $config_name." bold
     fi
