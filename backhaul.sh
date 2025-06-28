@@ -1292,9 +1292,9 @@ remove_cronjob() {
         else
             colorize red "Failed to remove cronjob for $config_name." bold
         fi
-    else
+    else # This is likely line 1295 or very close to it
         colorize yellow "No cronjob found for $config_name." bold
-    fi
+    fi # And this line following it
     echo
     press_key
 }
